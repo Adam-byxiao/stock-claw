@@ -1,30 +1,31 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Card, Radio, Spin, Statistic, Row, Col, Button, Descriptions } from 'antd';
-import { ArrowLeftOutlined } from '@ant-design/icons';
+import { Card, Radio, Spin, Statistic, Row, Col, Button, Descriptions, Tabs, Divider } from 'antd';
+import { ArrowLeftOutlined, FallOutlined, RiseOutlined } from '@ant-design/icons';
 import ReactECharts from 'echarts-for-react';
 import { useQuery } from '@tanstack/react-query';
-import { getKlineData, getStockData, getTimelineData } from '../api';
+import { getKlineData, getStockInfo, getTimelineData } from '../api';
+
+const { TabPane } = Tabs;
 
 const StockDetail: React.FC = () => {
   const { code } = useParams<{ code: string }>();
   const navigate = useNavigate();
-  const [chartType, setChartType] = useState('day'); // 'timeline' or 'day', 'week', etc.
+  const [chartType, setChartType] = useState('day'); 
   
-  // Fetch real-time info
+  // Fetch stock detailed info (Fundamental + Quote)
   const { data: stockInfo, isLoading: isInfoLoading } = useQuery({
-    queryKey: ['stockDetail', code],
+    queryKey: ['stockInfo', code],
     queryFn: async () => {
       if (!code) return null;
-      const res = await getStockData([code]);
-      return res[0];
+      return await getStockInfo(code);
     },
     refetchInterval: 3000,
   });
 
-  // Fetch Kline data
-  const { data: klineData, isLoading: isKlineLoading } = useQuery({
-    queryKey: ['klineData', code, chartType],
+  // Fetch Kline/Timeline data
+  const { data: chartData, isLoading: isChartLoading } = useQuery({
+    queryKey: ['chartData', code, chartType],
     queryFn: async () => {
       if (!code) return [];
       if (chartType === 'timeline') {
@@ -32,37 +33,35 @@ const StockDetail: React.FC = () => {
       }
       return await getKlineData(code, chartType);
     },
-    refetchInterval: chartType === 'timeline' ? 60000 : false, // Refresh timeline every minute
+    refetchInterval: chartType === 'timeline' ? 60000 : false,
   });
 
   const getOption = () => {
-    if (!klineData || klineData.length === 0) return {};
+    if (!chartData || chartData.length === 0) return {};
 
-    const dates = klineData.map((item: any) => item.time);
+    const dates = chartData.map((item: any) => item.time);
     
     if (chartType === 'timeline') {
-        // Timeline Chart (Line)
-        const prices = klineData.map((item: any) => item.price);
-        // Calculate min/max for better y-axis scaling
+        const prices = chartData.map((item: any) => item.price);
         const minPrice = Math.min(...prices);
         const maxPrice = Math.max(...prices);
         const padding = (maxPrice - minPrice) * 0.1;
 
         return {
-            title: { text: `${stockInfo?.name || code} 分时图`, left: 0 },
             tooltip: { trigger: 'axis' },
-            grid: { left: '5%', right: '5%', bottom: '10%' },
+            grid: { left: '5%', right: '5%', bottom: '10%', top: '10%' },
             xAxis: { 
                 type: 'category', 
                 data: dates,
                 boundaryGap: false,
-                axisLabel: { interval: 29 } // Show label every 30 mins roughly (240 points total)
+                axisLabel: { interval: 29 }
             },
             yAxis: { 
                 type: 'value', 
                 scale: true,
                 min: (minPrice - padding).toFixed(2),
-                max: (maxPrice + padding).toFixed(2)
+                max: (maxPrice + padding).toFixed(2),
+                splitLine: { show: true, lineStyle: { type: 'dashed' } }
             },
             series: [{
                 name: '价格',
@@ -70,22 +69,21 @@ const StockDetail: React.FC = () => {
                 data: prices,
                 smooth: true,
                 symbol: 'none',
-                lineStyle: { width: 2, color: '#1890ff' },
+                lineStyle: { width: 1.5, color: '#1890ff' },
                 areaStyle: {
                     color: {
                         type: 'linear',
                         x: 0, y: 0, x2: 0, y2: 1,
                         colorStops: [
-                            { offset: 0, color: 'rgba(24,144,255,0.3)' }, 
-                            { offset: 1, color: 'rgba(24,144,255,0.1)' }
+                            { offset: 0, color: 'rgba(24,144,255,0.2)' }, 
+                            { offset: 1, color: 'rgba(24,144,255,0.05)' }
                         ]
                     }
                 }
             }]
         };
     } else {
-        // Kline Chart (Candlestick)
-        const data = klineData.map((item: any) => [
+        const data = chartData.map((item: any) => [
             item.open, 
             item.close, 
             item.low, 
@@ -94,21 +92,11 @@ const StockDetail: React.FC = () => {
         ]);
 
         return {
-          title: {
-              text: `${stockInfo?.name || code} K线图`,
-              left: 0
-          },
           tooltip: {
             trigger: 'axis',
-            axisPointer: {
-              type: 'cross'
-            }
+            axisPointer: { type: 'cross' }
           },
-          grid: {
-            left: '10%',
-            right: '10%',
-            bottom: '15%'
-          },
+          grid: { left: '5%', right: '5%', bottom: '10%', top: '10%' },
           xAxis: {
             type: 'category',
             data: dates,
@@ -116,43 +104,23 @@ const StockDetail: React.FC = () => {
             boundaryGap: false,
             axisLine: { onZero: false },
             splitLine: { show: false },
-            splitNumber: 20,
             min: 'dataMin',
             max: 'dataMax'
           },
-          yAxis: {
-            scale: true,
-            splitArea: {
-              show: true
-            }
-          },
-          dataZoom: [
-            {
-              type: 'inside',
-              start: 50,
-              end: 100
-            },
-            {
-              show: true,
-              type: 'slider',
-              top: '90%',
-              start: 50,
-              end: 100
-            }
-          ],
+          yAxis: { scale: true, splitArea: { show: false } },
+          dataZoom: [{ type: 'inside', start: 50, end: 100 }],
           series: [
             {
-              name: '日K',
+              name: 'K线',
               type: 'candlestick',
               data: data,
-              // Adjust bar width here
               barWidth: '60%', 
               barMaxWidth: 20,
               itemStyle: {
                 color: '#ec0000',
                 color0: '#00da3c',
-                borderColor: '#8A0000',
-                borderColor0: '#008F28'
+                borderColor: '#ec0000',
+                borderColor0: '#00da3c'
               }
             }
           ]
@@ -162,71 +130,113 @@ const StockDetail: React.FC = () => {
 
   if (!code) return <div>Invalid Code</div>;
 
-  return (
-    <div>
-        <Button icon={<ArrowLeftOutlined />} onClick={() => navigate(-1)} style={{ marginBottom: 16 }}>返回</Button>
-        
-        {isInfoLoading && !stockInfo ? <Spin /> : (
-            <Card style={{ marginBottom: 16 }}>
-                <Row gutter={24}>
-                    <Col span={6}>
-                        <Statistic 
-                            title="最新价" 
-                            value={stockInfo?.price} 
-                            precision={2}
-                            valueStyle={{ color: Number(stockInfo?.percent) >= 0 ? '#ff4d4f' : '#52c41a' }}
-                        />
-                    </Col>
-                    <Col span={6}>
-                        <Statistic 
-                            title="涨跌幅" 
-                            value={stockInfo?.percent} 
-                            precision={2}
-                            suffix="%"
-                            valueStyle={{ color: Number(stockInfo?.percent) >= 0 ? '#ff4d4f' : '#52c41a' }}
-                        />
-                    </Col>
-                    <Col span={12}>
-                        <Descriptions size="small" column={4}>
-                            <Descriptions.Item label="最高">{stockInfo?.high}</Descriptions.Item>
-                            <Descriptions.Item label="最低">{stockInfo?.low}</Descriptions.Item>
-                            <Descriptions.Item label="今开">{stockInfo?.open}</Descriptions.Item>
-                            <Descriptions.Item label="昨收">{stockInfo?.yestclose}</Descriptions.Item>
-                            <Descriptions.Item label="成交量">{(Number(stockInfo?.volume)/100).toFixed(0)}手</Descriptions.Item>
-                            <Descriptions.Item label="成交额">{(Number(stockInfo?.amount)/10000).toFixed(2)}万</Descriptions.Item>
-                        </Descriptions>
-                    </Col>
-                </Row>
-            </Card>
-        )}
+  const isUp = (stockInfo?.change_percent || 0) >= 0;
+  const color = isUp ? '#ff4d4f' : '#52c41a';
 
-        <Card>
-            <div style={{ marginBottom: 16, textAlign: 'right' }}>
-                <Radio.Group value={chartType} onChange={(e) => setChartType(e.target.value)} buttonStyle="solid">
-                    <Radio.Button value="timeline">分时</Radio.Button>
-                    <Radio.Button value="day">日线</Radio.Button>
-                    <Radio.Button value="week">周线</Radio.Button>
-                    <Radio.Button value="month">月线</Radio.Button>
-                    <Radio.Button value="5">5分钟</Radio.Button>
-                    <Radio.Button value="15">15分钟</Radio.Button>
-                    <Radio.Button value="30">30分钟</Radio.Button>
-                    <Radio.Button value="60">60分钟</Radio.Button>
-                </Radio.Group>
-            </div>
-            
-            {isKlineLoading ? (
-                <div style={{ height: 500, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-                    <Spin size="large" />
+  return (
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+        {/* Header Section */}
+        <div style={{ marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', alignItems: 'center' }}>
+                <Button icon={<ArrowLeftOutlined />} onClick={() => navigate(-1)} type="text" style={{ marginRight: 16 }} />
+                <div>
+                    <span style={{ fontSize: 24, fontWeight: 'bold', marginRight: 8 }}>{stockInfo?.name || code}</span>
+                    <span style={{ color: '#999' }}>{stockInfo?.code}</span>
                 </div>
-            ) : (
-                <ReactECharts 
-                    option={getOption()} 
-                    style={{ height: 500 }} 
-                    notMerge={true} 
-                    lazyUpdate={true}
-                />
+            </div>
+            {stockInfo && (
+                <div style={{ display: 'flex', alignItems: 'baseline' }}>
+                    <span style={{ fontSize: 32, fontWeight: 'bold', color, marginRight: 16 }}>
+                        {stockInfo.price.toFixed(2)}
+                    </span>
+                    <span style={{ fontSize: 16, color, marginRight: 16 }}>
+                        {isUp ? <RiseOutlined /> : <FallOutlined />} {stockInfo.change_percent}%
+                    </span>
+                    <span style={{ fontSize: 16, color }}>
+                         {(stockInfo.price - stockInfo.yestclose).toFixed(2)}
+                    </span>
+                </div>
             )}
-        </Card>
+        </div>
+
+        {/* Main Content: Left Chart + Right Stats */}
+        <Row gutter={16} style={{ flex: 1 }}>
+            {/* Left Column: Charts */}
+            <Col span={17}>
+                <Card 
+                    bodyStyle={{ padding: '0 24px 24px 24px' }}
+                    style={{ height: '100%' }}
+                >
+                    <Tabs 
+                        activeKey={chartType} 
+                        onChange={setChartType} 
+                        tabBarStyle={{ marginBottom: 16 }}
+                        items={[
+                            { label: '分时', key: 'timeline' },
+                            { label: '日线', key: 'day' },
+                            { label: '周线', key: 'week' },
+                            { label: '月线', key: 'month' },
+                            { label: '5分钟', key: '5' },
+                            { label: '15分钟', key: '15' },
+                            { label: '30分钟', key: '30' },
+                            { label: '60分钟', key: '60' },
+                        ]}
+                    />
+                    
+                    {isChartLoading ? (
+                        <div style={{ height: 500, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                            <Spin size="large" />
+                        </div>
+                    ) : (
+                        <ReactECharts 
+                            option={getOption()} 
+                            style={{ height: 500 }} 
+                            notMerge={true} 
+                            lazyUpdate={true}
+                        />
+                    )}
+                </Card>
+            </Col>
+
+            {/* Right Column: Statistics */}
+            <Col span={7}>
+                {/* 1. Quote Stats */}
+                <Card title="基础行情" size="small" style={{ marginBottom: 16 }}>
+                    {isInfoLoading ? <Spin /> : (
+                        <Descriptions column={2} size="small">
+                            <Descriptions.Item label="今开"><span style={{ color: stockInfo?.open! > stockInfo?.yestclose! ? '#ff4d4f' : '#52c41a' }}>{stockInfo?.open}</span></Descriptions.Item>
+                            <Descriptions.Item label="昨收">{stockInfo?.yestclose}</Descriptions.Item>
+                            <Descriptions.Item label="最高"><span style={{ color: '#ff4d4f' }}>{stockInfo?.high}</span></Descriptions.Item>
+                            <Descriptions.Item label="最低"><span style={{ color: '#52c41a' }}>{stockInfo?.low}</span></Descriptions.Item>
+                            <Descriptions.Item label="成交量">{(stockInfo?.volume! / 10000).toFixed(0)}万手</Descriptions.Item>
+                            <Descriptions.Item label="成交额">{(stockInfo?.amount! / 10000).toFixed(2)}亿</Descriptions.Item>
+                            <Descriptions.Item label="振幅">{stockInfo?.amplitude}%</Descriptions.Item>
+                            <Descriptions.Item label="换手">{stockInfo?.turnover_rate}%</Descriptions.Item>
+                        </Descriptions>
+                    )}
+                </Card>
+
+                {/* 2. Fundamental Stats */}
+                <Card title="基本面指标" size="small">
+                    {isInfoLoading ? <Spin /> : (
+                        <Descriptions column={1} size="small" bordered>
+                            <Descriptions.Item label="市盈率 (TTM)">
+                                <strong>{stockInfo?.pe_ttm}</strong>
+                            </Descriptions.Item>
+                            <Descriptions.Item label="市净率 (PB)">
+                                <strong>{stockInfo?.pb}</strong>
+                            </Descriptions.Item>
+                            <Descriptions.Item label="总市值">
+                                {stockInfo?.market_cap} 亿
+                            </Descriptions.Item>
+                            <Descriptions.Item label="流通市值">
+                                {stockInfo?.float_market_cap} 亿
+                            </Descriptions.Item>
+                        </Descriptions>
+                    )}
+                </Card>
+            </Col>
+        </Row>
     </div>
   );
 };

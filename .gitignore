@@ -1,0 +1,7 @@
+docs/
+server/data/
+server/.env
+node_modules/
+dist/
+.DS_Store
+leek-fund/

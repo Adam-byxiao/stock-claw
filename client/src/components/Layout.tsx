@@ -4,6 +4,7 @@ import {
   DashboardOutlined,
   NotificationOutlined,
   FundOutlined,
+  RobotOutlined,
 } from '@ant-design/icons';
 import { useNavigate, useLocation, Outlet } from 'react-router-dom';
 
@@ -33,6 +34,11 @@ const AppLayout: React.FC = () => {
       key: '/fund-flow',
       icon: <FundOutlined />,
       label: '资金流向',
+    },
+    {
+      key: '/agent',
+      icon: <RobotOutlined />,
+      label: '智能投研',
     },
   ];
 

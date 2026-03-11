@@ -18,6 +18,25 @@ export interface StockData {
   source: string;
 }
 
+export interface StockInfo {
+    code: string;
+    name: string;
+    price: number;
+    change_percent: number;
+    open: number;
+    yestclose: number;
+    high: number;
+    low: number;
+    volume: number;
+    amount: number;
+    turnover_rate: number; // 换手率
+    pe_ttm: number;        // 市盈率
+    pb: number;            // 市净率
+    market_cap: number;    // 总市值
+    float_market_cap: number; // 流通市值
+    amplitude: number;     // 振幅
+}
+
 export interface StockSuggest {
   code: string;
   name: string;
@@ -121,19 +140,74 @@ export class StockService {
   }
 
   /**
+   * Get Stock Info (Fundamental) from Tencent
+   */
+  async getStockInfo(code: string): Promise<StockInfo | null> {
+      const url = `http://qt.gtimg.cn/q=${code}`;
+      
+      try {
+          const data = await httpGet(url, 'arraybuffer');
+          if (!data) return null;
+          
+          const text = iconv.decode(data, 'gb18030');
+          const matches = text.match(/v_(\w+)="(.+)";/);
+          if (!matches || matches.length < 3) return null;
+          
+          const params = matches[2].split('~');
+          if (params.length < 45) return null;
+          
+          return {
+              code: matches[1],
+              name: params[1],
+              price: Number(params[3]),
+              yestclose: Number(params[4]),
+              open: Number(params[5]),
+              high: Number(params[33]),
+              low: Number(params[34]),
+              volume: Number(params[36]),
+              amount: Number(params[37]),
+              change_percent: Number(params[32]),
+              
+              turnover_rate: Number(params[38]),
+              pe_ttm: Number(params[39]),
+              amplitude: Number(params[43]),
+              float_market_cap: Number(params[44]),
+              market_cap: Number(params[45]),
+              pb: Number(params[46])
+          };
+      } catch (err) {
+          console.error('Failed to get stock info:', err);
+          return null;
+      }
+  }
+
+  /**
    * Search stock suggest from Tencent
    */
   async getStockSuggest(keyword: string): Promise<StockSuggest[]> {
     const url = `https://proxy.finance.qq.com/ifzqgtimg/appstock/smartbox/search/get?q=${encodeURIComponent(keyword)}`;
     try {
       const data = await httpGet(url, 'json');
+      if (typeof data === 'string') {
+          return [];
+      }
+      
       if (data && data.code === 0 && data.data && data.data.stock) {
-        return data.data.stock.map((item: any) => ({
-          code: item.t + item.c, // e.g. sh600519
-          name: item.n,
-          type: item.t,
-          symbol: item.c
-        }));
+        return data.data.stock.map((item: any[]) => {
+            if (!Array.isArray(item) || item.length < 3) return null;
+            
+            const market = item[0];
+            const symbol = item[1];
+            const name = item[2];
+            const fullCode = `${market}${symbol}`;
+            
+            return {
+                code: fullCode, 
+                name: name,
+                type: market,
+                symbol: symbol
+            };
+        }).filter((item: any) => item !== null);
       }
       return [];
     } catch (err) {
@@ -143,51 +217,61 @@ export class StockService {
   }
 
   /**
-   * Get Kline data from Tencent
+   * Get Kline data from EastMoney (replacing Tencent to fix outdated data)
    * @param code Stock code with prefix (e.g. sh600519)
-   * @param type kline type: day, week, month, 5, 15, 30, 60
+   * @param type kline type: day, week, month
    */
   async getKlineData(code: string, type: string = 'day'): Promise<KlineData[]> {
-      // Map frontend type to Tencent API param
-      // Tencent API: day, week, month, m5, m15, m30, m60
-      const typeMap: Record<string, string> = {
-          day: 'day',
-          week: 'week',
-          month: 'month',
-          '5': 'm5',
-          '15': 'm15',
-          '30': 'm30',
-          '60': 'm60'
-      };
+      // EastMoney secid: 1.600519 (SH), 0.000001 (SZ)
+      // Map prefix to secid prefix
+      let secid = '';
+      if (code.startsWith('sh')) {
+          secid = `1.${code.substring(2)}`;
+      } else if (code.startsWith('sz')) {
+          secid = `0.${code.substring(2)}`;
+      } else if (code.startsWith('bj')) {
+          secid = `0.${code.substring(2)}`; // BJ is usually 0 too in EM? Need verify. Actually BJ is 0.
+      } else {
+          return [];
+      }
       
-      const kType = typeMap[type] || 'day';
-      // e.g. https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param=sh600519,day,,,320,qfq
-      const url = `https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param=${code},${kType},,,320,qfq`;
+      // klt: 101=Day, 102=Week, 103=Month
+      let klt = '101';
+      if (type === 'week') klt = '102';
+      if (type === 'month') klt = '103';
+      
+      // fqt: 1=QFQ (Forward Adjusted)
+      // fields1=f1,f2,f3,f4,f5,f6
+      // fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61
+      // f51: date, f52: open, f53: close, f54: high, f55: low, f56: volume, f57: amount, f58: amplitude, f59: percent, f60: change, f61: turnover
+      
+      const url = `https://push2his.eastmoney.com/api/qt/stock/kline/get?secid=${secid}&fields1=f1,f2,f3,f4,f5,f6&fields2=f51,f52,f53,f54,f55,f56&klt=${klt}&fqt=1&end=20500101&lmt=120`;
       
       try {
           const data = await httpGet(url, 'json');
-          if (data && data.code === 0 && data.data && data.data[code]) {
-             const klineRaw = data.data[code][kType] || data.data[code]['qfq' + kType] || data.data[code][type];
-             if (Array.isArray(klineRaw)) {
-                 return klineRaw.map((item: any[]) => ({
-                     time: item[0],
-                     open: Number(item[1]),
-                     close: Number(item[2]),
-                     high: Number(item[3]),
-                     low: Number(item[4]),
-                     volume: Number(item[5])
-                 }));
-             }
+          if (data && data.data && data.data.klines) {
+              return data.data.klines.map((item: string) => {
+                  const parts = item.split(',');
+                  // parts: date, open, close, high, low, volume
+                  return {
+                      time: parts[0],
+                      open: Number(parts[1]),
+                      close: Number(parts[2]),
+                      high: Number(parts[3]),
+                      low: Number(parts[4]),
+                      volume: Number(parts[5])
+                  };
+              });
           }
           return [];
       } catch (err) {
-          console.error('Failed to get kline:', err);
+          console.error('Failed to get kline from EastMoney:', err);
           return [];
       }
   }
 
   /**
-   * Get Minute Timeline data from Tencent
+   * Get Minute Timeline data from Tencent (Keeping Tencent for minute data as it's usually realtime)
    * @param code Stock code with prefix (e.g. sh600519)
    */
   async getTimelineData(code: string): Promise<TimelineData[]> {
@@ -198,8 +282,6 @@ export class StockService {
       
       if (data && data.code === 0 && data.data && data.data[code]) {
         const stockData = data.data[code];
-        // Usually data is in 'data.data' or 'minute' field
-        // Tencent minute data might be "0930 14.55 4609" strings or objects
         const minuteData = stockData.data?.data || stockData.minute;
         
         if (Array.isArray(minuteData)) {
@@ -212,13 +294,11 @@ export class StockService {
                     price = Number(parts[1]);
                     volume = Number(parts[2]);
                 } else {
-                    // Object format
-                    time = item.time || item[0]; // some apis return [time, price, vol]
+                    time = item.time || item[0];
                     price = Number(item.price || item[1]);
                     volume = Number(item.volume || item[2]);
                 }
                 
-                // Format time: 0930 -> 09:30
                 if (time && time.length === 4 && !time.includes(':')) {
                     time = `${time.substring(0,2)}:${time.substring(2,4)}`;
                 }

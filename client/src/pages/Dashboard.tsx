@@ -32,12 +32,21 @@ const StockDashboard: React.FC = () => {
     setFetching(true);
     try {
         const data = await searchStock(value);
-        const options = data.map((item: any) => ({
-            label: `${item.code} - ${item.name}`,
-            value: item.code,
-            key: item.code
-        }));
-        setSearchOptions(options);
+        if (Array.isArray(data)) {
+            const options = data
+                .filter((item: any) => item && item.code && item.name) // Filter invalid items
+                .map((item: any) => ({
+                    label: `${item.code} - ${item.name}`,
+                    value: item.code,
+                    key: item.code
+                }));
+            setSearchOptions(options);
+        } else {
+            setSearchOptions([]);
+        }
+    } catch (e) {
+        console.error("Search failed", e);
+        setSearchOptions([]);
     } finally {
         setFetching(false);
     }
@@ -49,7 +58,10 @@ const StockDashboard: React.FC = () => {
       return;
     }
     addCode(value);
-    setSearchOptions([]);
+    // Do NOT clear options here, as it might cause flicker or issues if user wants to see what they selected
+    // Or clear it after a slight delay if needed, but usually keeping it or resetting input is better.
+    // For now, let's keep the options but maybe clear the input value if we had control over it.
+    // But Select component manages its own value.
     message.success('添加成功');
   };
 
@@ -153,6 +165,8 @@ const StockDashboard: React.FC = () => {
           style={{ width: 300 }}
           size="large"
           allowClear
+          // Fix: key issue in options is handled by key prop in options mapping
+          // Fix: flicker might be due to rapid state updates or Select trying to filter internally
         />
       </div>
       <Table 

@@ -6,6 +6,7 @@ import StockDashboard from './pages/Dashboard';
 import NewsFeed from './pages/News';
 import FundFlow from './pages/FundFlow';
 import StockDetail from './pages/StockDetail';
+import AgentChat from './pages/AgentChat';
 
 const queryClient = new QueryClient();
 
@@ -19,6 +20,7 @@ const App: React.FC = () => {
             <Route path="dashboard" element={<StockDashboard />} />
             <Route path="news" element={<NewsFeed />} />
             <Route path="fund-flow" element={<FundFlow />} />
+            <Route path="agent" element={<AgentChat />} />
             <Route path="stock/:code" element={<StockDetail />} />
           </Route>
         </Routes>

@@ -2,12 +2,19 @@ import axios from 'axios';
 
 export const apiClient = axios.create({
   baseURL: 'http://localhost:3001/api',
-  timeout: 10000,
+  timeout: 120000, // Increased timeout to 120s (2 mins) for LLM deep analysis
 });
 
 export const getStockData = async (codes: string[]) => {
   const { data } = await apiClient.get('/stock', {
     params: { codes: codes.join(',') },
+  });
+  return data.data;
+};
+
+export const getStockInfo = async (code: string) => {
+  const { data } = await apiClient.get('/stock/info', {
+    params: { code },
   });
   return data.data;
 };
@@ -50,4 +57,11 @@ export const getSectorFundFlow = async (type: string = 'concept') => {
 export const getHSGTFlow = async () => {
   const { data } = await apiClient.get('/fund/hsgt');
   return data.data;
+};
+
+export const chatWithAgent = async (message: string) => {
+  const { data } = await apiClient.post('/agent/chat', {
+    message
+  });
+  return data;
 };

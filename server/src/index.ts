@@ -3,6 +3,9 @@ import cors from '@fastify/cors';
 import { StockService } from './core/stock';
 import { NewsService } from './core/news';
 import { FundFlowService } from './core/fund';
+import { LLMService } from './core/llm';
+import { ScreenerService } from './core/screener';
+import { SYSTEM_ANALYSIS_PROMPT } from './prompts/analysis';
 
 const server = fastify({ logger: true });
 
@@ -14,10 +17,12 @@ server.register(cors, {
 const stockService = new StockService();
 const newsService = new NewsService();
 const fundFlowService = new FundFlowService();
+const llmService = new LLMService();
+const screenerService = new ScreenerService();
 
 // --- API Routes ---
 
-// 1. Get Stock Data
+// 1. Get Stock Data (Sina)
 server.get<{ Querystring: { codes: string } }>('/api/stock', async (request, reply) => {
   const codes = request.query.codes ? request.query.codes.split(',') : [];
   if (codes.length === 0) {
@@ -25,6 +30,14 @@ server.get<{ Querystring: { codes: string } }>('/api/stock', async (request, rep
   }
   const data = await stockService.getStockData(codes);
   return { data };
+});
+
+// 1.0 Get Stock Info (Fundamental)
+server.get<{ Querystring: { code: string } }>('/api/stock/info', async (request, reply) => {
+    const { code } = request.query;
+    if (!code) return reply.code(400).send({ error: 'Missing code' });
+    const data = await stockService.getStockInfo(code);
+    return { data };
 });
 
 // 1.1 Search Stock
@@ -71,6 +84,75 @@ server.get('/api/fund/hsgt', async (request, reply) => {
   return { data };
 });
 
+// 6. Agent Chat (Updated with Analysis)
+server.post<{ Body: { message: string, model?: string } }>('/api/agent/chat', async (request, reply) => {
+    const { message } = request.body;
+    if (!message) return reply.code(400).send({ error: 'Missing message' });
+
+    console.log(`[Agent] Received message: "${message}"`);
+    
+    // 1. Parse Intent with LLM
+    const intent = await llmService.parseIntent(message);
+    console.log(`[Agent] Intent parsed:`, intent);
+    
+    if (intent.type === 'screen' && intent.strategy) {
+        // 2. Execute Screener Strategy
+        const results = await screenerService.search(intent.strategy, intent.params || {});
+        
+        if (results.length === 0) {
+            return {
+                type: 'text',
+                reply: `已为您筛选符合策略【${intent.strategy}】的股票，但暂无匹配结果。`,
+                data: []
+            };
+        }
+
+        // 3. Generate Deep Analysis using LLM
+        // Limit to top 3 for analysis to avoid token limit
+        const topResults = results.slice(0, 3);
+        const analysisData = JSON.stringify(topResults);
+        
+        console.log(`[Agent] Generating analysis for ${topResults.length} stocks...`);
+        const startTime = Date.now();
+        
+        const analysisReport = await llmService.chat([
+            { role: 'system', content: SYSTEM_ANALYSIS_PROMPT },
+            { role: 'user', content: `筛选策略：${intent.strategy}\n筛选结果数据：${analysisData}` }
+        ]);
+        
+        const duration = Date.now() - startTime;
+        console.log(`[Agent] Analysis generated in ${duration}ms`);
+
+        return {
+            type: 'screener_result',
+            reply: analysisReport, // Markdown report
+            data: results // Full list for UI rendering
+        };
+    } else {
+        // Chat mode
+        return {
+            type: 'text',
+            reply: intent.reply || '抱歉，我无法处理该请求。',
+            data: null
+        };
+    }
+});
+
+// 7. Get Stock Pool
+server.get('/api/stocks/pool', async (request, reply) => {
+    const data = screenerService.getPool();
+    return { code: 0, data };
+});
+
+// 8. Trigger Sync
+server.post('/api/sync/trigger', async (request, reply) => {
+    // Run sync asynchronously to avoid blocking
+    screenerService.sync().catch(err => {
+        console.error('[Sync] Manual trigger failed:', err);
+    });
+    return { status: 'ok', message: 'Sync started' };
+});
+
 // 5. OpenClaw Agent Manifest (Optional, for auto-discovery)
 server.get('/manifest.json', async (request, reply) => {
   return {
@@ -83,6 +165,11 @@ server.get('/manifest.json', async (request, reply) => {
         parameters: { codes: "string (comma separated)" }
       },
       {
+        name: "get_stock_info",
+        description: "Get stock fundamental info (PE, PB, MarketCap).",
+        parameters: { code: "string" }
+      },
+      {
         name: "get_market_news",
         description: "Get latest market news.",
         parameters: { limit: "number" }
@@ -91,6 +178,16 @@ server.get('/manifest.json', async (request, reply) => {
         name: "get_fund_flow",
         description: "Get sector fund flow.",
         parameters: { type: "string (concept|industry|region)" }
+      },
+      {
+        name: "get_stock_pool",
+        description: "Get the current dynamic stock pool (Top 100 active stocks).",
+        parameters: {}
+      },
+      {
+        name: "trigger_sync",
+        description: "Trigger manual data synchronization from external sources.",
+        parameters: {}
       }
     ]
   };
