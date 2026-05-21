@@ -1,4 +1,5 @@
 import { httpGet } from '../utils/http';
+import axios from 'axios';
 import * as iconv from 'iconv-lite';
 
 export interface StockData {
@@ -245,10 +246,19 @@ export class StockService {
       // fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61
       // f51: date, f52: open, f53: close, f54: high, f55: low, f56: volume, f57: amount, f58: amplitude, f59: percent, f60: change, f61: turnover
       
-      const url = `https://push2his.eastmoney.com/api/qt/stock/kline/get?secid=${secid}&fields1=f1,f2,f3,f4,f5,f6&fields2=f51,f52,f53,f54,f55,f56&klt=${klt}&fqt=1&end=20500101&lmt=120`;
+      const url = `http://push2his.eastmoney.com/api/qt/stock/kline/get?secid=${secid}&ut=fa5fd1943c7b386f172d6893dbfba10b&fields1=f1,f2,f3,f4,f5,f6&fields2=f51,f52,f53,f54,f55,f56&klt=${klt}&fqt=1&end=20500101&lmt=120`;
       
       try {
-          const data = await httpGet(url, 'json');
+          const response = await axios.get(url, {
+              timeout: 10000,
+              proxy: false,
+              headers: {
+                  Referer: `https://quote.eastmoney.com/${code}.html`,
+                  'User-Agent':
+                      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+              },
+          });
+          const data = response.data;
           if (data && data.data && data.data.klines) {
               return data.data.klines.map((item: string) => {
                   const parts = item.split(',');
@@ -265,7 +275,46 @@ export class StockService {
           }
           return [];
       } catch (err) {
-          console.error('Failed to get kline from EastMoney:', err);
+          console.warn(
+              'Failed to get kline from EastMoney, falling back to Tencent:',
+              err instanceof Error ? err.message : err
+          );
+          return this.getTencentKlineData(code, type);
+      }
+  }
+
+  private async getTencentKlineData(code: string, type: string = 'day'): Promise<KlineData[]> {
+      const period = type === 'week' || type === 'month' ? type : 'day';
+      const dataKey = `qfq${period}`;
+      const url = `https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param=${code},${period},,,120,qfq`;
+
+      try {
+          const response = await axios.get(url, {
+              timeout: 10000,
+              proxy: false,
+              headers: {
+                  Referer: 'https://gu.qq.com/',
+                  'User-Agent':
+                      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+              },
+          });
+          const stockData = response.data?.data?.[code];
+          const rows = stockData?.[dataKey] ?? stockData?.[period] ?? [];
+
+          if (!Array.isArray(rows)) {
+              return [];
+          }
+
+          return rows.map((item: string[]) => ({
+              time: item[0],
+              open: Number(item[1]),
+              close: Number(item[2]),
+              high: Number(item[3]),
+              low: Number(item[4]),
+              volume: Number(item[5]),
+          }));
+      } catch (err) {
+          console.error('Failed to get kline from Tencent:', err);
           return [];
       }
   }

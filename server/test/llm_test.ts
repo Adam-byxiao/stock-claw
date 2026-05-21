@@ -10,6 +10,7 @@ async function testLLM() {
   console.log(`API Key: ${process.env.LLM_API_KEY ? '******' + process.env.LLM_API_KEY.slice(-4) : 'Not Set'}`);
   console.log(`Base URL: ${process.env.LLM_BASE_URL}`);
   console.log(`Model: ${process.env.LLM_MODEL}`);
+  console.log(`Embedding Model: ${process.env.LLM_EMBEDDING_MODEL}`);
 
   const llm = new LLMService();
 

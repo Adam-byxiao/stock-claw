@@ -1,12 +1,10 @@
 import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Card, Radio, Spin, Statistic, Row, Col, Button, Descriptions, Tabs, Divider } from 'antd';
+import { Card, Spin, Row, Col, Button, Descriptions, Tabs } from 'antd';
 import { ArrowLeftOutlined, FallOutlined, RiseOutlined } from '@ant-design/icons';
 import ReactECharts from 'echarts-for-react';
 import { useQuery } from '@tanstack/react-query';
 import { getKlineData, getStockInfo, getTimelineData } from '../api';
-
-const { TabPane } = Tabs;
 
 const StockDetail: React.FC = () => {
   const { code } = useParams<{ code: string }>();

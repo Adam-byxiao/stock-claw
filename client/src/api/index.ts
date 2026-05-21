@@ -1,9 +1,32 @@
 import axios from 'axios';
 
+const resolvedApiBaseUrl = (
+  import.meta as ImportMeta & {
+    env?: {
+      VITE_API_BASE_URL?: string;
+    };
+  }
+).env?.VITE_API_BASE_URL?.trim();
+
 export const apiClient = axios.create({
-  baseURL: 'http://localhost:3001/api',
+  baseURL: resolvedApiBaseUrl || '/api',
   timeout: 120000, // Increased timeout to 120s (2 mins) for LLM deep analysis
 });
+
+export const getApiErrorMessage = (error: unknown, fallback: string): string => {
+  if (axios.isAxiosError(error)) {
+    const responseMessage = (error.response?.data as { error?: string } | undefined)?.error;
+    if (responseMessage) {
+      return responseMessage;
+    }
+  }
+
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+
+  return fallback;
+};
 
 export const getStockData = async (codes: string[]) => {
   const { data } = await apiClient.get('/stock', {

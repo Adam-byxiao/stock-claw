@@ -2,9 +2,17 @@ import React, { useState } from 'react';
 import { List, Card, Tag, Button, Spin, Empty, Typography } from 'antd';
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '../api';
-import dayjs from 'dayjs';
 
 const { Paragraph } = Typography;
+
+const formatBeijingNewsTime = (timestampSeconds: number): string => {
+  return new Intl.DateTimeFormat('zh-CN', {
+    timeZone: 'Asia/Shanghai',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).format(new Date(timestampSeconds * 1000));
+};
 
 const NewsFeed: React.FC = () => {
   const [limit, setLimit] = useState(20);
@@ -49,7 +57,7 @@ const NewsFeed: React.FC = () => {
             renderItem={(item: any) => (
               <List.Item>
                 <Card 
-                    title={dayjs(item.created_at * 1000).format('HH:mm')} 
+                    title={formatBeijingNewsTime(item.created_at)} 
                     size="small"
                     hoverable
                     style={{ height: '100%' }}

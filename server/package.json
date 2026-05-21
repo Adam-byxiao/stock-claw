@@ -4,9 +4,10 @@
   "description": "",
   "main": "dist/index.js",
   "scripts": {
-    "start": "ts-node src/index.ts",
+    "start": "node dist/index.js",
     "dev": "ts-node src/index.ts",
-    "build": "tsc"
+    "build": "tsc",
+    "test:v0": "set TS_NODE_PROJECT=tsconfig.test.json&& node --test -r ts-node/register test/v0_config.test.ts test/v0_poll.test.ts test/v0_enrichment.test.ts test/v0_push_digest.test.ts test/v0_feishu_push.test.ts test/v0_agent.test.ts test/v0_status.test.ts test/v0_persona.test.ts test/v0_persona_distill.test.ts test/v0_persona_inference.test.ts test/v0_market_facts.test.ts"
   },
   "keywords": [],
   "author": "",

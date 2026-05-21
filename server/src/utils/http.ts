@@ -54,6 +54,7 @@ export const httpGet = async (url: string, responseType: 'arraybuffer' | 'text' 
     headers: { ...randHeader(), ...headers },
     responseType: responseType as any,
     timeout: 10000,
+    proxy: false,
   };
   
   try {

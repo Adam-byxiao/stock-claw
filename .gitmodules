@@ -1,0 +1,4 @@
+[submodule "skill/colleague-skill"]
+	path = skill/colleague-skill
+	url = https://github.com/titanwings/colleague-skill.git
+	branch = dot-skill

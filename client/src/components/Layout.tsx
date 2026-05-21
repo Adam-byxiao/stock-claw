@@ -5,10 +5,23 @@ import {
   NotificationOutlined,
   FundOutlined,
   RobotOutlined,
+  SettingOutlined,
+  MessageOutlined,
+  ExperimentOutlined,
+  IdcardOutlined,
+  RadarChartOutlined,
+  DatabaseOutlined,
 } from '@ant-design/icons';
 import { useNavigate, useLocation, Outlet } from 'react-router-dom';
 
 const { Header, Content, Footer, Sider } = Layout;
+
+const getBeijingYear = (): string => {
+  return new Intl.DateTimeFormat('zh-CN', {
+    timeZone: 'Asia/Shanghai',
+    year: 'numeric',
+  }).format(new Date());
+};
 
 const AppLayout: React.FC = () => {
   const navigate = useNavigate();
@@ -40,6 +53,41 @@ const AppLayout: React.FC = () => {
       icon: <RobotOutlined />,
       label: '智能投研',
     },
+    {
+      key: '/v0/oneshot',
+      icon: <ExperimentOutlined />,
+      label: 'V0 单次抓取',
+    },
+    {
+      key: '/v0/monitor',
+      icon: <SettingOutlined />,
+      label: 'V0配置',
+    },
+    {
+      key: '/v0/messages',
+      icon: <MessageOutlined />,
+      label: 'V0消息流',
+    },
+    {
+      key: '/v0/agent',
+      icon: <ExperimentOutlined />,
+      label: 'V0 Agent',
+    },
+    {
+      key: '/v0/persona-demo',
+      icon: <IdcardOutlined />,
+      label: '人物画像 Demo',
+    },
+    {
+      key: '/v0/persona-v2-demo',
+      icon: <RadarChartOutlined />,
+      label: '方法论 V2',
+    },
+    {
+      key: '/v0/external-data',
+      icon: <DatabaseOutlined />,
+      label: '外部数据源',
+    },
   ];
 
   return (
@@ -69,7 +117,7 @@ const AppLayout: React.FC = () => {
           </div>
         </Content>
         <Footer style={{ textAlign: 'center' }}>
-          Stock-Claw ©{new Date().getFullYear()} Created by Trae AI
+          Stock-Claw ©{getBeijingYear()} Created by Trae AI
         </Footer>
       </Layout>
     </Layout>

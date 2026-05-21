@@ -1,6 +1,7 @@
 import db from './db';
 import { StockService } from './stock';
 import { RankService } from './rank';
+import { toBeijingISOString } from '../v0/shared/time';
 
 export class SyncService {
   private stockService: StockService;
@@ -64,7 +65,7 @@ export class SyncService {
     
     // Use transaction for speed
     const insertMany = db.transaction((klines: any[], code: string, name: string) => {
-        stmtInsertStock.run(code, name, new Date().toISOString());
+        stmtInsertStock.run(code, name, toBeijingISOString());
         for (const k of klines) {
             stmtInsertKline.run(code, k.time, k.open, k.close, k.high, k.low, k.volume);
         }
