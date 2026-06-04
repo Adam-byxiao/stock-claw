@@ -1,5 +1,3 @@
-docs/*
-!docs/PROJECT_V2.md
 server/data/
 server/.env
 node_modules/
